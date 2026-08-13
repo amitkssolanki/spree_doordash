@@ -16,5 +16,10 @@ Spree::Core::Engine.add_routes do
     # update it in place, `find_or_initialize_by(store:)` style.
     get 'doordash_credential' => 'doordash_credentials#show', as: :doordash_credential
     patch 'doordash_credential' => 'doordash_credentials#update'
+
+    # M5 — admin support/diagnostic pages, same read-only shape as
+    # spree_square's own (:index only).
+    resources :doordash_delivery_mappings, only: [:index]
+    resources :doordash_webhook_events, only: [:index]
   end
 end

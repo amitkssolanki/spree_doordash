@@ -14,9 +14,16 @@ class CreateSpreeDoordashWebhookEvents < ActiveRecord::Migration[8.1]
       t.string :event_name, null: false
       t.string :payload_digest, null: false
 
-      # json, not jsonb — see CreateSpreeDoordashQuoteMappings for why
-      # (SQLite dummy app, no SQL-level JSON querying here).
-      t.json :payload, null: false, default: {}
+      # jsonb on Postgres, json on SQLite (the dummy app used for specs has
+      # no jsonb type at all) — see CreateSpreeDoordashQuoteMappings for the
+      # full rationale. Plain `json` alone is wrong on Postgres: it has no
+      # equality operator, which broke this exact table's own admin listing
+      # page (`SELECT DISTINCT`) — found live, not hypothetical.
+      if t.respond_to?(:jsonb)
+        t.jsonb :payload, null: false, default: {}
+      else
+        t.json :payload, null: false, default: {}
+      end
       t.datetime :processed_at
       t.string :status, null: false, default: 'pending' # pending, processed, failed
       t.text :error_message

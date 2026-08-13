@@ -29,8 +29,15 @@ class CreateSpreeDoordashDeliveryMappings < ActiveRecord::Migration[8.1]
       t.text :dispatch_error
 
       # Full response from the accept call, for debugging/support
-      # visibility — same rationale as QuoteMapping#raw_response.
-      t.json :raw_response
+      # visibility — same rationale as QuoteMapping#raw_response (see that
+      # migration for why this is jsonb-on-Postgres/json-on-SQLite rather
+      # than plain json — confirmed live via a real 500 on this table's own
+      # admin listing page before the fix).
+      if t.respond_to?(:jsonb)
+        t.jsonb :raw_response
+      else
+        t.json :raw_response
+      end
 
       t.timestamps
     end

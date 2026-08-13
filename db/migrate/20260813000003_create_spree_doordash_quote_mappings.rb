@@ -24,8 +24,20 @@ class CreateSpreeDoordashQuoteMappings < ActiveRecord::Migration[8.1]
       t.datetime :dropoff_time_estimated
 
       # Full response, for debugging/support visibility — same rationale as
-      # WebhookEvent#payload elsewhere in this codebase.
-      t.json :raw_response
+      # WebhookEvent#payload elsewhere in this codebase. jsonb on Postgres,
+      # json on SQLite — same `respond_to?(:jsonb)` branch spree_core's own
+      # migrations use (e.g. add_metadata_to_spree_orders), since SQLite (the
+      # dummy app used for specs) has no jsonb type at all. Plain `json`
+      # alone is wrong on Postgres specifically: it has no equality
+      # operator, which breaks the `SELECT DISTINCT` an admin table listing
+      # issues — confirmed live, not hypothetical (spree_host's own
+      # /admin/doordash_delivery_mappings page 500'd on exactly this before
+      # this fix).
+      if t.respond_to?(:jsonb)
+        t.jsonb :raw_response
+      else
+        t.json :raw_response
+      end
 
       t.timestamps
     end

@@ -56,4 +56,39 @@ namespace :spree_doordash do
       exit 1
     end
   end
+
+  desc 'Map a Spree stock location to a DoorDash store (M5 — a rake task, not a full admin CRUD screen: restaurants have a handful of locations, not hundreds)'
+  task :map_location, %i[stock_location doordash_store_id doordash_business_id] => :environment do |_t, args|
+    unless args[:stock_location] && args[:doordash_store_id]
+      abort <<~USAGE
+        Usage:
+          bin/rails "spree_doordash:map_location[stock_location_id_or_name,doordash_store_id,doordash_business_id]"
+
+        doordash_business_id defaults to "default" — DoorDash Sandbox
+        auto-assigns a "default" business/store to every access key, so this
+        is normally all you need there. Only pass a real business id once
+        you've done full Business/Store API onboarding for production.
+      USAGE
+    end
+
+    stock_location = Spree::StockLocation.find_by(id: args[:stock_location]) ||
+                      Spree::StockLocation.find_by(name: args[:stock_location])
+    abort "No stock location found matching '#{args[:stock_location]}'" unless stock_location
+
+    # Spree::StockLocation has no store association of its own in this
+    # Spree version (confirmed by reading the model — stock locations
+    # aren't Store-scoped) — same single-default-store scope as the rest
+    # of this extension (see SpreeDoordash::Quote's own order.store ||
+    # Spree::Store.default).
+    store = Spree::Store.default
+    mapping = SpreeDoordash::LocationMapping.find_or_initialize_by(stock_location: stock_location)
+    mapping.assign_attributes(
+      store: store,
+      doordash_store_id: args[:doordash_store_id],
+      doordash_business_id: args[:doordash_business_id].presence || 'default'
+    )
+    mapping.save!
+
+    puts "✅ Mapped '#{stock_location.name}' -> DoorDash store #{mapping.doordash_store_id} (business #{mapping.doordash_business_id})"
+  end
 end
