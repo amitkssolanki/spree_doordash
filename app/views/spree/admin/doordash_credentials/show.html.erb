@@ -1,0 +1,55 @@
+<% content_for :page_title do %>
+  DoorDash Connection
+<% end %>
+
+<div class="card w-full max-w-2xl">
+  <div class="card-header flex items-center justify-between <%= 'bg-green-50' if @credential.persisted? %>">
+    <span class="font-medium">DoorDash Drive</span>
+    <% if @credential.persisted? %>
+      <span class="inline-flex items-center text-xs font-medium text-green-700">
+        <span class="w-1.5 h-1.5 rounded-full bg-green-500 mr-1"></span>
+        Configured
+      </span>
+    <% else %>
+      <span class="inline-flex items-center text-xs font-medium text-gray-500">
+        <span class="w-1.5 h-1.5 rounded-full bg-gray-400 mr-1"></span>
+        Not configured
+      </span>
+    <% end %>
+  </div>
+
+  <%= form_for @credential, url: admin_doordash_credential_path, method: :patch,
+        as: :spree_doordash_credential, html: { class: 'card-body space-y-4' } do |f| %>
+    <p class="text-sm text-gray-600">
+      Create an access key in the
+      <a href="https://developer.doordash.com" target="_blank" rel="noopener" class="text-blue-600 underline">DoorDash Developer Portal</a>
+      and paste its three values below. Stored encrypted — no OAuth redirect needed.
+    </p>
+
+    <div>
+      <%= f.label :doordash_environment, 'Environment', class: 'label' %>
+      <%= f.select :doordash_environment, %w[sandbox production], {}, class: 'select' %>
+    </div>
+    <div>
+      <%= f.label :developer_id, 'Developer ID', class: 'label' %>
+      <%= f.text_field :developer_id, class: 'form-control' %>
+    </div>
+    <div>
+      <%= f.label :key_id, 'Key ID', class: 'label' %>
+      <%= f.text_field :key_id, class: 'form-control' %>
+    </div>
+    <div>
+      <%= f.label :signing_secret, 'Signing Secret', class: 'label' %>
+      <%= f.password_field :signing_secret, value: '', placeholder: (@credential.persisted? ? '••••••••  (leave blank to keep current)' : nil), class: 'form-control' %>
+    </div>
+    <div>
+      <%= f.label :webhook_basic_auth_token, 'Webhook Basic Auth value', class: 'label' %>
+      <%= f.password_field :webhook_basic_auth_token, value: '', placeholder: (@credential.webhook_basic_auth_token.present? ? '••••••••  (leave blank to keep current)' : 'e.g. Basic dGVzdDp0ZXN0'), class: 'form-control' %>
+      <p class="text-xs text-gray-500 mt-1">The exact Authorization header value configured for this store's webhook endpoint in DoorDash's dashboard.</p>
+    </div>
+
+    <div class="card-footer -mx-4 -mb-4">
+      <%= f.submit 'Save', class: 'btn btn-primary' %>
+    </div>
+  <% end %>
+</div>
