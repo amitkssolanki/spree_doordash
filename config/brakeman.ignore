@@ -1,0 +1,28 @@
+{
+  "ignored_warnings": [
+    {
+      "warning_type": "Cross-Site Request Forgery",
+      "warning_code": 86,
+      "fingerprint": "94410153d7554be55a85180f6c1c03417ecd7547075ef01e8c34b9ceb69785c6",
+      "check_name": "ForgerySetting",
+      "message": "`protect_from_forgery` should be configured with `with: :exception`",
+      "file": "app/controllers/spree_doordash/webhooks_controller.rb",
+      "line": 17,
+      "link": "https://brakemanscanner.org/docs/warning_types/cross-site_request_forgery/",
+      "code": "protect_from_forgery(:with => :null_session)",
+      "render_path": null,
+      "location": {
+        "type": "controller",
+        "controller": "SpreeDoordash::WebhooksController"
+      },
+      "user_input": null,
+      "confidence": "Medium",
+      "cwe_id": [
+        352
+      ],
+      "note": "Intentional, not a false positive to fix: this is a webhook endpoint authenticated by DoorDash's Basic Auth header (SpreeDoordash::WebhookVerifier), not by a Rails session, so there's no session-based state for CSRF to protect in the first place. `:exception` (Brakeman's preferred default) would make every legitimate webhook POST raise ActionController::InvalidAuthenticityToken, since DoorDash never sends a Rails CSRF token — that would break the endpoint entirely, not harden it. `:null_session` is the correct, standard Rails pattern for an unauthenticated-by-session API/webhook endpoint. Same finding, same justification, as the identical pattern in the sibling spree_square gem's own WebhooksController."
+    }
+  ],
+  "updated": "2026-08-13 23:33:31 +0530",
+  "brakeman_version": "8.0.5"
+}

@@ -10,6 +10,11 @@ module SpreeDoordash
   class WebhookEvent < Spree.base_class
     self.table_name = 'spree_doordash_webhook_events'
 
+    # Ruby-level, not a DB-level `default: {}` on the migration — MySQL
+    # rejects a literal DEFAULT on a JSON column outright (see that
+    # migration's own comment). Works identically on every adapter.
+    attribute :payload, default: -> { {} }
+
     validates :external_delivery_id, presence: true
     validates :event_name, presence: true
     validates :payload_digest, presence: true, uniqueness: { scope: %i[external_delivery_id event_name] }

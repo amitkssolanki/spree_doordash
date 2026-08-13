@@ -19,10 +19,18 @@ class CreateSpreeDoordashWebhookEvents < ActiveRecord::Migration[8.1]
       # full rationale. Plain `json` alone is wrong on Postgres: it has no
       # equality operator, which broke this exact table's own admin listing
       # page (`SELECT DISTINCT`) — found live, not hypothetical.
+      #
+      # No `default: {}` on either branch — MySQL rejects a literal DEFAULT
+      # on BLOB/TEXT/GEOMETRY/JSON columns outright, which would cancel
+      # every migration after this one on that adapter (found live via this
+      # exact bug in the sibling spree_square gem's own MySQL CI job — not
+      # yet hit here since this gem has no MySQL CI, but the same migration
+      # would fail identically). Default now lives on the model instead
+      # (see WebhookEvent's own `attribute :payload, default: -> { {} }`).
       if t.respond_to?(:jsonb)
-        t.jsonb :payload, null: false, default: {}
+        t.jsonb :payload, null: false
       else
-        t.json :payload, null: false, default: {}
+        t.json :payload, null: false
       end
       t.datetime :processed_at
       t.string :status, null: false, default: 'pending' # pending, processed, failed

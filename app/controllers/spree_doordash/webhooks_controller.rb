@@ -6,7 +6,15 @@ module SpreeDoordash
   # DoorDash "sends each webhook event up to 3 times" on anything other
   # than 200 (its own docs), so a slow or non-2xx response means retries.
   class WebhooksController < ActionController::Base
-    skip_before_action :verify_authenticity_token, raise: false
+    # Explicit, not just `skip_before_action :verify_authenticity_token` —
+    # this controller doesn't inherit the host app's ApplicationController
+    # (where `protect_from_forgery` normally gets declared), so a static
+    # analyzer (Brakeman) correctly flags it as never actually configured
+    # either way — confirmed by the identical warning on spree_square's own
+    # WebhooksController. `:null_session` degrades a forged/missing token
+    # to an empty session instead of raising — appropriate here since this
+    # endpoint is Basic-Auth-verified, not session-authenticated.
+    protect_from_forgery with: :null_session
 
     def create
       credential = SpreeDoordash::Credential.find_by(store: Spree::Store.default)
