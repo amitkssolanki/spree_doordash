@@ -30,4 +30,18 @@ FactoryBot.define do
     currency { 'USD' }
     quote_expires_at { 5.minutes.from_now }
   end
+
+  factory :doordash_delivery_mapping, class: 'SpreeDoordash::DeliveryMapping' do
+    order
+    sequence(:external_delivery_id) { |i| "spree-doordash-R#{i}-accepted" }
+    last_status { 'created' }
+    tracking_url { 'https://doordash.com/tracking?id=abc123' }
+  end
+
+  factory :doordash_webhook_event, class: 'SpreeDoordash::WebhookEvent' do
+    sequence(:external_delivery_id) { |i| "spree-doordash-R#{i}" }
+    event_name { 'DASHER_CONFIRMED' }
+    sequence(:payload_digest) { |i| "digest-#{i}" }
+    payload { { 'event_name' => 'DASHER_CONFIRMED', 'external_delivery_id' => 'spree-doordash-R1' } }
+  end
 end

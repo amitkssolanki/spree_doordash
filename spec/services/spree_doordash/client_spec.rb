@@ -64,4 +64,38 @@ RSpec.describe SpreeDoordash::Client do
       end
     end
   end
+
+  describe '#accept_quote' do
+    it 'posts to /drive/v2/quotes/{external_delivery_id}/accept' do
+      client = described_class.for_store(store)
+      stub = stub_request(:post, 'https://openapi.doordash.com/drive/v2/quotes/del_123/accept')
+             .with(body: {}.to_json)
+             .to_return(status: 200, body: { delivery_status: 'created', tracking_url: 'https://doordash.com/tracking?id=x' }.to_json,
+                        headers: { 'Content-Type' => 'application/json' })
+
+      result = client.accept_quote('del_123')
+
+      expect(stub).to have_been_requested
+      expect(result['delivery_status']).to eq('created')
+    end
+
+    it 'includes tip_cents as "tip" in the body when given' do
+      client = described_class.for_store(store)
+      stub = stub_request(:post, 'https://openapi.doordash.com/drive/v2/quotes/del_123/accept')
+             .with(body: { tip: 600 }.to_json)
+             .to_return(status: 200, body: { delivery_status: 'created' }.to_json, headers: { 'Content-Type' => 'application/json' })
+
+      client.accept_quote('del_123', tip_cents: 600)
+
+      expect(stub).to have_been_requested
+    end
+
+    it 'raises RequestError on a non-2xx response (e.g. the quote already expired on DoorDash'"'"'s side)' do
+      client = described_class.for_store(store)
+      stub_request(:post, 'https://openapi.doordash.com/drive/v2/quotes/del_123/accept')
+        .to_return(status: 422, body: { code: 'quote_expired' }.to_json)
+
+      expect { client.accept_quote('del_123') }.to raise_error(SpreeDoordash::RequestError)
+    end
+  end
 end

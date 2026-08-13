@@ -3,10 +3,13 @@ class CreateSpreeDoordashQuoteMappings < ActiveRecord::Migration[8.1]
     create_table :spree_doordash_quote_mappings do |t|
       t.references :order, null: false, foreign_key: { to_table: :spree_orders }, index: { unique: true }
 
-      # Ours — generated deterministically from the order number (see
-      # SpreeDoordash::Quote), the join key DoorDash's own webhooks and the
-      # accept-quote/get-delivery calls all key off, same role as
-      # square_order_id plays for spree_square's OrderMapping.
+      # Ours — "spree-doordash-#{order.number}-#{random suffix}" (see
+      # SpreeDoordash::Quote; the random suffix is required — DoorDash
+      # rejects a second /drive/v2/quotes call reusing the same id with 409
+      # duplicate_delivery_id, confirmed against a real Sandbox re-quote).
+      # The join key DoorDash's own webhooks and the accept-quote/
+      # get-delivery calls all key off, same role as square_order_id plays
+      # for spree_square's OrderMapping.
       t.string :external_delivery_id, null: false
 
       t.integer :quoted_fee_cents

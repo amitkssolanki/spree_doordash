@@ -45,6 +45,17 @@ module SpreeDoordash
       request(:post, '/drive/v2/quotes', payload)
     end
 
+    # Formally creates the delivery from a still-open quote. Must be called
+    # within 5 minutes of the quote (DoorDash's own documented limit — see
+    # SpreeDoordash::QuoteMapping#expired?). external_delivery_id is reused
+    # as the delivery's own id for its whole lifecycle; DoorDash issues no
+    # separate one (confirmed against
+    # developer.doordash.com/en-US/docs/drive/how_to/quote_deliveries/).
+    def accept_quote(external_delivery_id, tip_cents: nil)
+      body = tip_cents ? { tip: tip_cents } : {}
+      request(:post, "/drive/v2/quotes/#{external_delivery_id}/accept", body)
+    end
+
     private
 
     def request(method, path, body = nil)
