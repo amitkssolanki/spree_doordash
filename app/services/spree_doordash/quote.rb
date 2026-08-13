@@ -19,7 +19,18 @@ module SpreeDoordash
       return nil unless location_mapping && order.ship_address
 
       client = SpreeDoordash::Client.for_store(order.store || Spree::Store.default)
-      external_delivery_id = "spree-doordash-#{order.number}"
+      # A random suffix per attempt, not just order.number — confirmed live
+      # against a real Sandbox quote: DoorDash rejects a *second*
+      # /drive/v2/quotes call reusing the same external_delivery_id with a
+      # 409 duplicate_delivery_id, even though the first quote is still open
+      # (not yet accepted or expired). Checkout recalculates shipping rates
+      # on essentially every step, so calling this twice for the same order
+      # is the normal case, not an edge case — a stable per-order id made
+      # the DoorDash rate silently vanish (RequestError is rescued below,
+      # same as any other unserviceable-rate case) after the very first
+      # quote. QuoteMapping upserts on order, so only the most recent
+      # attempt's id is kept — the one that matters for accept (M4).
+      external_delivery_id = "spree-doordash-#{order.number}-#{SecureRandom.hex(4)}"
 
       response = client.create_quote(build_payload(order, location_mapping, external_delivery_id))
       mapping = persist_quote!(order, external_delivery_id, response)

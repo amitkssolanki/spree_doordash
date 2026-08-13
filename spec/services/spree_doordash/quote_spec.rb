@@ -22,7 +22,11 @@ RSpec.describe SpreeDoordash::Quote do
 
       expect(result.fee_cents).to eq(975)
       expect(result.currency).to eq('USD')
-      expect(result.external_delivery_id).to eq("spree-doordash-#{order.number}")
+      # Not an exact "spree-doordash-#{order.number}" match — a random
+      # per-attempt suffix is appended (see Quote#call's comment: a stable
+      # per-order id gets rejected by a real second /drive/v2/quotes call
+      # for the same order with 409 duplicate_delivery_id).
+      expect(result.external_delivery_id).to match(/\Aspree-doordash-#{order.number}-[0-9a-f]{8}\z/)
 
       mapping = SpreeDoordash::QuoteMapping.find_by(order: order)
       expect(mapping.quoted_fee_cents).to eq(975)
