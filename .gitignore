@@ -21,3 +21,7 @@ public/spree
 .ruby-gemset
 *.gem
 */*.gem
+
+# Real DoorDash Sandbox credentials for manual verification — never committed,
+# unlike the test-only encryption keys in .env.
+.env.sandbox
