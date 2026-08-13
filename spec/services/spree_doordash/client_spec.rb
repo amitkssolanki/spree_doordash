@@ -27,8 +27,17 @@ RSpec.describe SpreeDoordash::Client do
              .with { |req|
                token = req.headers['Authorization'].to_s.sub(/^Bearer /, '')
                header = JWT.decode(token, nil, false).last
-               payload = JWT.decode(token, Base64.decode64(credential.signing_secret), true, algorithm: 'HS256').first
+               payload = JWT.decode(token, Base64.urlsafe_decode64(credential.signing_secret), true, algorithm: 'HS256').first
 
+               # Both of these were verified directly against a real DoorDash
+               # Sandbox endpoint, not just DoorDash's docs — the first live
+               # request came back 401 twice, once for each: the signing
+               # secret must be base64url-decoded (not standard base64,
+               # despite DoorDash's own JS sample code implying either
+               # works), and `typ: 'JWT'` must be explicit in the header
+               # (the `jwt` gem doesn't add it automatically the way Node's
+               # jsonwebtoken — what DoorDash's sample code uses — does).
+               expect(header['typ']).to eq('JWT')
                expect(header['dd-ver']).to eq('DD-JWT-V1')
                expect(payload['aud']).to eq('doordash')
                expect(payload['iss']).to eq(credential.developer_id)

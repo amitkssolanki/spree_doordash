@@ -82,8 +82,20 @@ module SpreeDoordash
         iat: now,
         exp: now + JWT_TTL
       }
-      key = Base64.decode64(@credential.signing_secret)
-      JWT.encode(payload, key, 'HS256', { 'dd-ver' => 'DD-JWT-V1' })
+      # base64url, NOT standard base64 — confirmed directly against a real
+      # Sandbox 401 ("please make sure... the signing secret was base64url
+      # decoded prior to signing") the first time this was tested live.
+      # DoorDash's own JS tutorial code uses plain `Buffer.from(secret,
+      # 'base64')`, which is misleading/wrong (or Node's 'base64' decoder
+      # happens to be lenient about the url-safe alphabet in a way Ruby's
+      # strict Base64.decode64 is not) — trust the API's own error over the
+      # sample code.
+      key = Base64.urlsafe_decode64(@credential.signing_secret)
+      # `typ: 'JWT'` explicitly — the `jwt` gem (v3.x here) doesn't add it
+      # automatically the way Node's `jsonwebtoken` (DoorDash's own sample
+      # code) does, and DoorDash's validator rejects a JWT with no `typ` at
+      # all rather than treating it as implied.
+      JWT.encode(payload, key, 'HS256', { 'dd-ver' => 'DD-JWT-V1', typ: 'JWT' })
     end
   end
 
