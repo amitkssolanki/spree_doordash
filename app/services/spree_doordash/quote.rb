@@ -73,12 +73,32 @@ module SpreeDoordash
         external_delivery_id: external_delivery_id,
         pickup_address: format_address(location_mapping.stock_location),
         pickup_business_name: location_mapping.stock_location.name,
-        pickup_phone_number: location_mapping.stock_location.phone.presence || '+10000000000',
+        pickup_phone_number: format_phone(location_mapping.stock_location.phone),
         pickup_instructions: location_mapping.stock_location.pickup_instructions,
         dropoff_address: format_address(order.ship_address),
-        dropoff_phone_number: order.ship_address.phone.presence || '+10000000000',
+        dropoff_phone_number: format_phone(order.ship_address.phone),
         order_value: (order.total * 100).to_i
       }
+    end
+
+    # DoorDash wants E.164 (+1XXXXXXXXXX) and rejects anything else outright
+    # — confirmed live: a real checkout with a normally-typed US phone number
+    # ("(202) 555-0199", exactly what an address form produces) got a real
+    # 400 "Unknown phone number format" from DoorDash, silently dropping the
+    # DoorDash Delivery rate with no visible error anywhere in the UI. Every
+    # earlier live verification in this project used numbers already typed
+    # in +1XXXXXXXXXX form by hand, which is why this never surfaced until
+    # an actual storefront checkout was driven through normally.
+    #
+    # US-only, matching the rest of this demo (every address here is a US
+    # address) — strips everything but digits, assumes a bare 10-digit
+    # number is domestic and prepends the country code.
+    def format_phone(raw)
+      digits = raw.to_s.gsub(/\D/, '')
+      digits = "1#{digits}" if digits.length == 10
+      return '+10000000000' if digits.blank?
+
+      "+#{digits}"
     end
 
     # Spree::StockLocation and Spree::Address share the same field shape

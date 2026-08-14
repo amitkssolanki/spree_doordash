@@ -73,5 +73,33 @@ RSpec.describe SpreeDoordash::Quote do
       stub_quote(fee: nil, status: 400)
       expect(described_class.call(order)).to be_nil
     end
+
+    context 'with a phone number formatted the way a real checkout form produces it' do
+      # Confirmed live: DoorDash rejects anything that isn't E.164 outright
+      # (a real 400 "Unknown phone number format" for "(202) 555-0199"),
+      # which silently dropped the DoorDash Delivery rate with zero visible
+      # error anywhere in checkout — every earlier live test in this project
+      # happened to use numbers already typed in +1XXXXXXXXXX form by hand.
+      let(:order) do
+        create(:order, store: store, ship_address: create(:address, phone: '(415) 555-0199'))
+      end
+
+      it 'normalizes both pickup and dropoff numbers to E.164 before calling DoorDash' do
+        stock_location.update!(phone: '(415) 555-0100')
+
+        stub = stub_request(:post, 'https://openapi.doordash.com/drive/v2/quotes')
+               .with { |req|
+                 body = JSON.parse(req.body)
+                 expect(body['pickup_phone_number']).to eq('+14155550100')
+                 expect(body['dropoff_phone_number']).to eq('+14155550199')
+                 true
+               }
+               .to_return(status: 200, body: { fee: 599, currency: 'USD' }.to_json, headers: { 'Content-Type' => 'application/json' })
+
+        described_class.call(order)
+
+        expect(stub).to have_been_requested
+      end
+    end
   end
 end
