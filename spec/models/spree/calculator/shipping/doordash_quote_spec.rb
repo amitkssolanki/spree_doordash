@@ -34,22 +34,42 @@ RSpec.describe Spree::Calculator::Shipping::DoordashQuote do
       expect(calculator.compute_package(package)).to be_nil
     end
 
-    it 'pushes a doordash_quote_unavailable warning onto the order when the quote fails — a real bug found live, previously silent' do
+    after do
+      # mark_unavailable's Thread.current flag is only ever meant to live
+      # for the span of one create_proposed_shipments call — clean up
+      # between examples so a failed assertion here can't bleed into
+      # a later one on the same test-runner thread.
+      described_class.clear_unavailable(order.id)
+    end
+
+    it 'marks the order id unavailable (thread-local) when the quote fails' do
+      # NOT order.warnings directly — see Spree::OrderDecorator for why.
+      # package.order (an instance_double here, deliberately == order) hides
+      # the real bug this design works around: in production, package.order
+      # is a freshly-queried, separate Spree::Order object from the one
+      # create_proposed_shipments holds (spree_core's InventoryUnitBuilder
+      # defers loading that association on purpose), so a direct
+      # `package.order.warnings |= [...]` here would mutate a throwaway
+      # copy — confirmed live via object_id tracing against production, not
+      # assumed. The thread-local flag, keyed by the order's stable id
+      # rather than Ruby object identity, is what actually survives that
+      # boundary; see order_decorator_spec.rb for the real, non-doubled
+      # integration test.
       allow(SpreeDoordash::Quote).to receive(:call).with(order).and_return(nil)
 
       calculator.compute_package(package)
 
-      expect(order.warnings.map { |w| w[:code] }).to include('doordash_quote_unavailable')
+      expect(described_class.unavailable?(order.id)).to be true
     end
 
-    it 'does not push a warning when the quote succeeds' do
+    it 'does not mark the order unavailable when the quote succeeds' do
       allow(SpreeDoordash::Quote).to receive(:call).with(order).and_return(
         SpreeDoordash::Quote::Result.new(fee_cents: 975, currency: 'USD', external_delivery_id: 'x', expires_at: Time.current)
       )
 
       calculator.compute_package(package)
 
-      expect(order.warnings).to be_empty
+      expect(described_class.unavailable?(order.id)).to be false
     end
   end
 

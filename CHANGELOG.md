@@ -2,6 +2,42 @@
 
 All notable changes to this project are documented here.
 
+## 0.1.3
+
+A real bug found live: the `doordash_quote_unavailable` warning added in 0.1.2 never actually
+worked in production. `Spree::Calculator::Shipping::DoordashQuote#compute_package` pushed it onto
+`package.order.warnings` — but `package.order` is **not** the same in-memory object as the order
+the caller (`Spree::Order#create_proposed_shipments`) holds. `spree_core`'s own
+`Spree::Stock::InventoryUnitBuilder#units` builds each inventory unit with `order_id: @order.id`
+but deliberately *not* `order: @order` ("avoid loading the association to order until needed," per
+its own comment) — the first thing that touches `.order` on one of those units triggers a fresh
+`Spree::Order.find`, a brand-new Ruby object. So the warning was mutating a throwaway copy,
+discarded the instant `compute_package` returned, and never reached the order this request
+actually serializes back to the storefront as `cart.warnings`. Confirmed via `object_id` tracing
+against production, not assumed — and confirmed the existing spec suite couldn't have caught it:
+`doordash_quote_spec.rb`'s own `instance_double(Spree::Stock::Package, order: order)` makes
+`package.order` the *same* object as the test's `order` by construction, sidestepping the exact
+boundary that breaks in real Spree core.
+
+Fixed by bridging across that boundary with the order's stable id instead of Ruby object identity
+— `Spree::Calculator::Shipping::DoordashQuote.mark_unavailable(order_id)` sets a thread-local flag
+(chosen over `Rails.cache`: this gem installs into arbitrary host apps, some of which legitimately
+run `config.cache_store = :null_store`, which would silently degrade this back to the original bug
+with zero indication anything was wrong — `compute_package` and `create_proposed_shipments` always
+run synchronously on the same thread within one request, so a thread-local needs no external store
+and no expiry logic). A new `Spree::OrderDecorator#create_proposed_shipments` reads the flag back
+and merges the warning onto `self.warnings` immediately after `super` returns — `self` there *is*
+the real order, since `create_proposed_shipments` is called directly on it by the checkout flow.
+The flag is cleared unconditionally at the *start* of every call (not just after a successful
+merge), so a stale flag left behind by an earlier request that raised before reaching the merge
+step can never leak into a later, unrelated call that happens to reuse the same thread.
+
+New `spec/models/spree/order_decorator_spec.rb` exercises the real
+`order_routing_strategy -> Estimator -> Packer -> InventoryUnitBuilder` path end to end (only
+`SpreeDoordash::Quote.call` is stubbed) — the only way to actually exercise the object-identity
+boundary the fix bridges across, rather than doubling it away. Full suite: 95 examples, 0 failures
+(5 new). Coverage: 94.14%. Brakeman clean.
+
 ## 0.1.2
 
 A real bug found live during checkout-validation work: a blank phone on the dropoff address used

@@ -34,14 +34,46 @@ module Spree
           # with no new API surface needed. The storefront renders its own
           # localized copy for this code; `message` here is English-only,
           # a fallback for any other API consumer, not the UI text itself.
-          package.order.warnings |= [{
-            code: 'doordash_quote_unavailable',
-            message: 'We could not get a DoorDash delivery quote for this address.'
-          }]
+          #
+          # A SECOND real bug found live (v0.1.2, this fix is v0.1.3):
+          # package.order is not the same object as the order the caller
+          # holds (spree_core's InventoryUnitBuilder deliberately defers
+          # loading that association — see the Spree::OrderDecorator this
+          # gem ships for the full story), so pushing the warning directly
+          # onto package.order.warnings here mutated a throwaway copy that
+          # never reached the real order. Thread.current bridges across
+          # that boundary via the order's id instead of Ruby object
+          # identity — chosen over Rails.cache deliberately: this gem
+          # installs into arbitrary host apps, some of which run
+          # `config.cache_store = :null_store` (the Rails test-env
+          # default, and a legitimate production choice too), which would
+          # silently degrade this back to the original bug with no
+          # indication anything was wrong. compute_package and
+          # create_proposed_shipments always run synchronously on the same
+          # thread within one request (confirmed: this is the exact call
+          # chain reproduced live to root-cause the original bug), so a
+          # thread-local flag needs no external store and no expiry logic
+          # — Spree::OrderDecorator clears it unconditionally at the start
+          # of every create_proposed_shipments call, so a stale flag from
+          # an earlier request that errored out before consuming it can
+          # never leak into a later, unrelated one.
+          self.class.mark_unavailable(package.order.id)
           return nil
         end
 
         result.fee_cents / 100.0
+      end
+
+      def self.mark_unavailable(order_id)
+        (Thread.current[:spree_doordash_quote_unavailable_order_ids] ||= []) << order_id
+      end
+
+      def self.unavailable?(order_id)
+        Thread.current[:spree_doordash_quote_unavailable_order_ids]&.include?(order_id) || false
+      end
+
+      def self.clear_unavailable(order_id)
+        Thread.current[:spree_doordash_quote_unavailable_order_ids]&.delete(order_id)
       end
 
       # Called by Estimator to filter which shipping methods even attempt
