@@ -74,6 +74,24 @@ RSpec.describe SpreeDoordash::Quote do
       expect(described_class.call(order)).to be_nil
     end
 
+    context 'with no phone on the ship address' do
+      # A real bug found live: this used to fall back to a fake placeholder
+      # number ("+10000000000") that DoorDash's API rejected anyway — the
+      # request was doomed before it was even built. Now it's a plain nil
+      # return, same shape as any other unserviceable case, with no API
+      # call at all.
+      let(:order) do
+        create(:order, store: store, ship_address: create(:address, phone: nil))
+      end
+
+      it 'returns nil without calling the DoorDash API' do
+        stub = stub_quote
+
+        expect(described_class.call(order)).to be_nil
+        expect(stub).not_to have_been_requested
+      end
+    end
+
     context 'with a phone number formatted the way a real checkout form produces it' do
       # Confirmed live: DoorDash rejects anything that isn't E.164 outright
       # (a real 400 "Unknown phone number format" for "(202) 555-0199"),

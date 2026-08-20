@@ -17,6 +17,16 @@ module SpreeDoordash
     def call(order)
       location_mapping = location_mapping_for(order)
       return nil unless location_mapping && order.ship_address
+      # A real bug found live: with no phone on the ship address,
+      # `format_phone` used to fall back to a fake placeholder number that
+      # DoorDash's API correctly rejects with a 400 — the request was
+      # doomed before it was even built. `Spree::Config[:address_requires_phone]`
+      # (spree_host) should make this unreachable in the normal storefront
+      # checkout flow, but this guard stays as defense in depth for any
+      # other path that can create an order (admin, API, migrated data)
+      # — same "unavailable, not exceptional" nil-return shape as every
+      # other unserviceable case below.
+      return nil if order.ship_address.phone.blank?
 
       client = SpreeDoordash::Client.for_store(order.store || Spree::Store.default)
       # A random suffix per attempt, not just order.number — confirmed live
@@ -93,11 +103,17 @@ module SpreeDoordash
     # US-only, matching the rest of this demo (every address here is a US
     # address) — strips everything but digits, assumes a bare 10-digit
     # number is domestic and prepends the country code.
+    #
+    # No blank-phone fallback here (a prior version faked one as
+    # "+10000000000" — DoorDash rejected it too, just as uninformatively as
+    # a missing one; better to let a genuinely blank pickup phone fail
+    # DoorDash's own validation loudly than paper over it with fake data).
+    # `call` above already guards the dropoff phone specifically; this
+    # method is also reused for the pickup (StockLocation) phone, which is
+    # real business data expected to always be set.
     def format_phone(raw)
       digits = raw.to_s.gsub(/\D/, '')
       digits = "1#{digits}" if digits.length == 10
-      return '+10000000000' if digits.blank?
-
       "+#{digits}"
     end
 

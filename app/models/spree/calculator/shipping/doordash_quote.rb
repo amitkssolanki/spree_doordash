@@ -20,7 +20,26 @@ module Spree
 
       def compute_package(package)
         result = SpreeDoordash::Quote.call(package.order)
-        return nil unless result
+        if result.nil?
+          # A real bug found live: a nil Result here (bad/missing phone, an
+          # address DoorDash genuinely can't serve, DoorDash API down —
+          # SpreeDoordash::Quote#call collapses all of these to the same
+          # "unavailable" nil, deliberately, so this stays generic to *why*)
+          # used to just make the rate silently vanish with zero signal
+          # anywhere in the UI. Spree::Order#warnings is the same
+          # transient, request-scoped mechanism core's own
+          # `ensure_available_shipping_rates` already uses for the
+          # identical class of problem (a line item that can't ship at
+          # all) — it flows through to the Store API's `cart.warnings`
+          # with no new API surface needed. The storefront renders its own
+          # localized copy for this code; `message` here is English-only,
+          # a fallback for any other API consumer, not the UI text itself.
+          package.order.warnings |= [{
+            code: 'doordash_quote_unavailable',
+            message: 'We could not get a DoorDash delivery quote for this address.'
+          }]
+          return nil
+        end
 
         result.fee_cents / 100.0
       end

@@ -2,6 +2,28 @@
 
 All notable changes to this project are documented here.
 
+## 0.1.2
+
+A real bug found live during checkout-validation work: a blank phone on the dropoff address used
+to fall back to a fake placeholder number (`+10000000000`) that DoorDash's API rejected anyway —
+the request was doomed before it was even built, and (same as the E.164 issue fixed in 0.1.1) the
+DoorDash Delivery rate just silently vanished with no error anywhere in the UI.
+
+- `SpreeDoordash::Quote#call` now returns early (no API call at all) when the ship address has no
+  phone, instead of building a request known to fail. `format_phone`'s placeholder fallback is
+  removed entirely.
+- `Spree::Calculator::Shipping::DoordashQuote#compute_package` now pushes a
+  `doordash_quote_unavailable` warning onto `Spree::Order#warnings` whenever `SpreeDoordash::Quote`
+  returns `nil` — generic to *why* the quote failed (bad/missing phone, an address DoorDash
+  genuinely can't serve, DoorDash API down), confirmed live for two different real causes.
+  `Spree::Order#warnings` is the same transient mechanism core's own
+  `ensure_available_shipping_rates` already uses for the identical class of problem, and flows
+  through to the Store API's `cart.warnings` with no new API surface. A storefront reference
+  implementation now renders this as a real, non-blocking banner instead of silence — see
+  `spree_storefront_web`'s `DeliveryMethodSection.tsx`.
+
+Full suite: 90 examples, 0 failures (2 new). Coverage: 94.14% (241/256 lines). Brakeman clean.
+
 ## 0.1.1
 
 Two real production bugs, both invisible to the full spec suite and to every prior "live

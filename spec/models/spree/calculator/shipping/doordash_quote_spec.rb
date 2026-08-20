@@ -33,6 +33,24 @@ RSpec.describe Spree::Calculator::Shipping::DoordashQuote do
 
       expect(calculator.compute_package(package)).to be_nil
     end
+
+    it 'pushes a doordash_quote_unavailable warning onto the order when the quote fails — a real bug found live, previously silent' do
+      allow(SpreeDoordash::Quote).to receive(:call).with(order).and_return(nil)
+
+      calculator.compute_package(package)
+
+      expect(order.warnings.map { |w| w[:code] }).to include('doordash_quote_unavailable')
+    end
+
+    it 'does not push a warning when the quote succeeds' do
+      allow(SpreeDoordash::Quote).to receive(:call).with(order).and_return(
+        SpreeDoordash::Quote::Result.new(fee_cents: 975, currency: 'USD', external_delivery_id: 'x', expires_at: Time.current)
+      )
+
+      calculator.compute_package(package)
+
+      expect(order.warnings).to be_empty
+    end
   end
 
   describe '#available?' do
